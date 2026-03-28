@@ -36,8 +36,14 @@ jobs:
       - name: Wait for services to be ready
         run: sleep 15
       
+      - name: Check all containers are running
+        run: docker compose ps
+
       - name: Check Django logs
         run: docker compose logs django-app
+
+      - name: Check cache logs
+        run: docker compose logs cache
       
       - name: Test redis endpoint
         run: |
