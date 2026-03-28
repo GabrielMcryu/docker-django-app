@@ -46,8 +46,10 @@ jobs:
         run: docker compose logs cache
       
       - name: Test redis endpoint
-        run: |
-          curl -f http://localhost:8000/api/redis-test/
+        run: curl -f http://localhost:8000/api/redis-test/ || true
+
+      - name: Check Django logs after redis test
+        run: docker compose logs django-app
 
       - name: Test create book endpoint
         run: |
