@@ -39,6 +39,20 @@ jobs:
       - name: Check Django logs
         run: docker compose logs django-app
       
+      - name: Test redis endpoint
+        run: |
+          curl -f http://localhost:8000/api/redis-test/
+
+      - name: Test create book endpoint
+        run: |
+          curl -f -X POST http://localhost:8000/api/books/ \
+            -H "Content-Type: application/json" \
+            -d '{"name": "The Pragmatic Programmer", "author": "David Thomas"}'
+
+      - name: Test get all books endpoint
+        run: |
+          curl -f http://localhost:8000/api/books/
+      
       - name: Tear down
         run: docker compose down
 
