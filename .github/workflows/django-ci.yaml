@@ -31,7 +31,7 @@ jobs:
           docker compose version
       
       - name: Build and start services
-        run docker compose up --build -d
+        run: docker compose up --build -d
       
       - name: Wait for services to be ready
         run: sleep 15
