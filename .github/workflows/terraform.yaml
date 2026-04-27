@@ -1,0 +1,154 @@
+# =============================================================================
+# GitHub Actions – Terraform CI/CD for Django on AKS
+# =============================================================================
+#
+# This workflow:
+#   • On PRs  → runs plan and posts output as a PR comment
+#   • On push → plans + applies
+#   • On workflow_run → after Django CI publishes the image, re-deploys
+# =============================================================================
+
+name: "Terraform CI/CD"
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  # Re-deploy after Django CI publishes a new container image
+  workflow_run:
+    workflows: ["Django CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.7.5"
+  WORKING_DIR: "."
+  # Azure credentials (service principal)
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  # Sensitive Terraform variables
+  TF_VAR_db_admin_password: ${{ secrets.TF_VAR_DB_ADMIN_PASSWORD }}
+  TF_VAR_django_secret_key: ${{ secrets.TF_VAR_DJANGO_SECRET_KEY }}
+  TF_VAR_ghcr_username: ${{ secrets.GHCR_USERNAME }}
+  TF_VAR_ghcr_token: ${{ secrets.GHCR_TOKEN }}
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Plan (PRs + push + after Django CI)
+  # ────────────────────────────────────────────────────────────────────────────
+  terraform-plan:
+    name: "Terraform Plan"
+    runs-on: ubuntu-latest
+    # Skip if triggered by workflow_run and the Django CI failed
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan
+        continue-on-error: true
+
+      # Post the plan output as a PR comment (only on pull_request events)
+      - name: Comment Plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const planOutput = `${{ steps.plan.outputs.stdout }}`;
+            const planError  = `${{ steps.plan.outputs.stderr }}`;
+            const exitCode   = `${{ steps.plan.outcome }}`;
+
+            const body = `### Terraform Plan – \`${exitCode}\`
+
+            <details><summary>Show plan output</summary>
+
+            \`\`\`hcl
+            ${planOutput}
+            \`\`\`
+
+            </details>
+
+            ${planError ? `<details><summary>Errors</summary>\n\n\`\`\`\n${planError}\n\`\`\`\n\n</details>` : ''}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body.substring(0, 65536)
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Upload Plan Artifact
+        if: >
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIR }}/tfplan
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Apply (only on push to main or after successful Django CI)
+  # ────────────────────────────────────────────────────────────────────────────
+  terraform-apply:
+    name: "Terraform Apply"
+    needs: terraform-plan
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    # In production, uncomment and configure required reviewers:
+    # environment: production
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIR }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
