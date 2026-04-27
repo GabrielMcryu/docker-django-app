@@ -9,3 +9,21 @@ wheels/
 # Virtual environments
 .venv
 *.env
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform/
+.terraform.lock.hcl
+
+# Variable files that may contain secrets
+*.tfvars
+!terraform.tfvars.example
+
+# Environment files
+.env
+
+# IDE
+.vscode/
+.idea/
