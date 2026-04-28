@@ -48,3 +48,8 @@ output "kubeconfig_command" {
   description = "Run this to configure kubectl locally."
   value       = "az aks get-credentials --resource-group ${azurerm_resource_group.main.name} --name ${module.aks.cluster_name}"
 }
+
+output "app_load_balancer_ip" {
+  description = "Public IP / hostname of the Django application LoadBalancer service."
+  value       = module.kubernetes_app.service_load_balancer_ip
+}

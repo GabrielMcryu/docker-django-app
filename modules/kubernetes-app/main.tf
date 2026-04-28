@@ -1,49 +1,166 @@
-# ── AKS Module ───────────────────────────────────────────────────────────────
+# =============================================================================
+# Module: Kubernetes Application (Django Deployment + Service)
+# =============================================================================
 
-module "aks" {
-  source = "./modules/aks"
+# ── Namespace ────────────────────────────────────────────────────────────────
 
-  project_name        = var.project_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  subnet_id           = azurerm_subnet.aks.id
-  node_count          = var.aks_node_count
-  node_vm_size        = var.aks_node_vm_size
-  tags                = var.tags
+resource "kubernetes_namespace" "app" {
+  metadata {
+    name = var.namespace
+  }
 }
 
-# ── Kubernetes Application Module ────────────────────────────────────────────
+# ── Secret for sensitive env vars ────────────────────────────────────────────
 
-module "kubernetes_app" {
-  source = "./modules/kubernetes-app"
-
-  app_name        = var.project_name
-  namespace       = var.k8s_namespace
-  container_image = var.container_image
-  replicas        = var.app_replicas
-
-  # GHCR image-pull credentials
-  ghcr_username = var.ghcr_username
-  ghcr_token    = var.ghcr_token
-
-  # Environment variables injected into the Django container
-  env_vars = {
-    DJANGO_SETTINGS_MODULE = var.django_settings_module
-    ALLOWED_HOSTS          = "*"
-    DB_HOST                = azurerm_postgresql_flexible_server.main.fqdn
-    DB_PORT                = "5432"
-    DB_NAME                = var.db_name
-    DB_USER                = var.db_admin_username
-    REDIS_HOST             = azurerm_redis_cache.main.hostname
-    REDIS_PORT             = tostring(azurerm_redis_cache.main.port)
+resource "kubernetes_secret" "app" {
+  metadata {
+    name      = "${var.app_name}-secret"
+    namespace = kubernetes_namespace.app.metadata[0].name
   }
 
-  # Sensitive values go into a Kubernetes Secret
-  secret_env_vars = {
-    DB_PASSWORD    = var.db_admin_password
-    SECRET_KEY     = var.django_secret_key
-    REDIS_PASSWORD = azurerm_redis_cache.main.primary_access_key
+  data = var.secret_env_vars
+}
+
+# ── GHCR Image-Pull Secret ──────────────────────────────────────────────────
+
+resource "kubernetes_secret" "ghcr" {
+  metadata {
+    name      = "ghcr-pull-secret"
+    namespace = kubernetes_namespace.app.metadata[0].name
   }
 
-  depends_on = [module.aks]
+  type = "kubernetes.io/dockerconfigjson"
+
+  data = {
+    ".dockerconfigjson" = jsonencode({
+      auths = {
+        "ghcr.io" = {
+          auth = base64encode("${var.ghcr_username}:${var.ghcr_token}")
+        }
+      }
+    })
+  }
+}
+
+# ── Deployment ───────────────────────────────────────────────────────────────
+
+resource "kubernetes_deployment" "app" {
+  metadata {
+    name      = var.app_name
+    namespace = kubernetes_namespace.app.metadata[0].name
+    labels = {
+      app = var.app_name
+    }
+  }
+
+  spec {
+    replicas = var.replicas
+
+    selector {
+      match_labels = {
+        app = var.app_name
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = var.app_name
+        }
+      }
+
+      spec {
+        image_pull_secrets {
+          name = kubernetes_secret.ghcr.metadata[0].name
+        }
+
+        container {
+          name  = var.app_name
+          image = var.container_image
+
+          port {
+            container_port = 8000
+          }
+
+          dynamic "env" {
+            for_each = var.env_vars
+            content {
+              name  = env.key
+              value = env.value
+            }
+          }
+
+          dynamic "env" {
+            for_each = var.secret_env_vars
+            content {
+              name = env.key
+              value_from {
+                secret_key_ref {
+                  name = kubernetes_secret.app.metadata[0].name
+                  key  = env.key
+                }
+              }
+            }
+          }
+
+          command = ["/bin/sh", "-c"]
+          args = [
+            "uv run manage.py migrate --noinput && uv run gunicorn django_redis_postgres_app.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+          ]
+
+          resources {
+            requests = {
+              cpu    = "250m"
+              memory = "256Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "512Mi"
+            }
+          }
+
+          liveness_probe {
+            http_get {
+              path = "/health/"
+              port = 8000
+            }
+            initial_delay_seconds = 30
+            period_seconds        = 10
+          }
+
+          readiness_probe {
+            http_get {
+              path = "/health/"
+              port = 8000
+            }
+            initial_delay_seconds = 15
+            period_seconds        = 5
+          }
+        }
+      }
+    }
+  }
+}
+
+# ── Service (LoadBalancer) ───────────────────────────────────────────────────
+
+resource "kubernetes_service" "app" {
+  metadata {
+    name      = "${var.app_name}-service"
+    namespace = kubernetes_namespace.app.metadata[0].name
+  }
+
+  spec {
+    type = "LoadBalancer"
+
+    selector = {
+      app = var.app_name
+    }
+
+    port {
+      port        = 80
+      target_port = 8000
+      protocol    = "TCP"
+    }
+  }
 }

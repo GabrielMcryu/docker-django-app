@@ -63,7 +63,7 @@ variable "app_replicas" {
 variable "django_settings_module" {
   description = "DJANGO_SETTINGS_MODULE env var value."
   type        = string
-  default     = "config.settings.production"
+  default     = "django_redis_postgres_app.settings"
 }
 
 variable "django_secret_key" {
@@ -103,4 +103,17 @@ variable "db_storage_mb" {
   description = "Storage allocated to PostgreSQL (MB)."
   type        = number
   default     = 32768
+}
+
+# ── GitHub Container Registry ────────────────────────────────────────────────
+
+variable "ghcr_username" {
+  description = "GitHub username for pulling images from GHCR."
+  type        = string
+}
+
+variable "ghcr_token" {
+  description = "GitHub PAT with read:packages scope – provide via TF_VAR_ghcr_token."
+  type        = string
+  sensitive   = true
 }

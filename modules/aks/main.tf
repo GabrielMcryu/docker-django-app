@@ -1,169 +1,34 @@
 # =============================================================================
-# Module: Kubernetes Application (Django Deployment + Service)
+# Module: AKS Cluster
 # =============================================================================
 
-# ── Namespace ────────────────────────────────────────────────────────────────
+resource "azurerm_kubernetes_cluster" "main" {
+  name                = "${var.project_name}-aks"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  dns_prefix          = var.project_name
 
-resource "kubernetes_namespace" "app" {
-  metadata {
-    name = var.namespace
-  }
-}
+  default_node_pool {
+    name           = "default"
+    node_count     = var.node_count
+    vm_size        = var.node_vm_size
+    vnet_subnet_id = var.subnet_id
 
-# ── Secret for sensitive env vars ────────────────────────────────────────────
-
-resource "kubernetes_secret" "app" {
-  metadata {
-    name      = "${var.app_name}-secret"
-    namespace = kubernetes_namespace.app.metadata[0].name
-  }
-
-  data = var.secret_env_vars
-}
-
-# ── GHCR Image-Pull Secret ──────────────────────────────────────────────────
-
-resource "kubernetes_secret" "ghcr" {
-  metadata {
-    name      = "ghcr-pull-secret"
-    namespace = kubernetes_namespace.app.metadata[0].name
-  }
-
-  type = "kubernetes.io/dockerconfigjson"
-
-  data = {
-    ".dockerconfigjson" = jsonencode({
-      auths = {
-        "ghcr.io" = {
-          auth = base64encode("${var.ghcr_username}:${var.ghcr_token}")
-        }
-      }
-    })
-  }
-}
-
-# ── Deployment ───────────────────────────────────────────────────────────────
-
-resource "kubernetes_deployment" "app" {
-  metadata {
-    name      = var.app_name
-    namespace = kubernetes_namespace.app.metadata[0].name
-    labels = {
-      app = var.app_name
+    upgrade_settings {
+      max_surge = "10%"
     }
   }
 
-  spec {
-    replicas = var.replicas
-
-    selector {
-      match_labels = {
-        app = var.app_name
-      }
-    }
-
-    template {
-      metadata {
-        labels = {
-          app = var.app_name
-        }
-      }
-
-      spec {
-        image_pull_secrets {
-          name = kubernetes_secret.ghcr.metadata[0].name
-        }
-
-        container {
-          name  = var.app_name
-          image = var.container_image
-
-          port {
-            container_port = 8000
-          }
-
-          # Non-sensitive environment variables
-          dynamic "env" {
-            for_each = var.env_vars
-            content {
-              name  = env.key
-              value = env.value
-            }
-          }
-
-          # Sensitive environment variables from the K8s Secret
-          dynamic "env" {
-            for_each = var.secret_env_vars
-            content {
-              name = env.key
-              value_from {
-                secret_key_ref {
-                  name = kubernetes_secret.app.metadata[0].name
-                  key  = env.key
-                }
-              }
-            }
-          }
-
-          # Run Django migrations on startup then start gunicorn
-          command = ["/bin/sh", "-c"]
-          args = [
-            "uv run manage.py migrate --noinput && uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
-          ]
-
-          resources {
-            requests = {
-              cpu    = "250m"
-              memory = "256Mi"
-            }
-            limits = {
-              cpu    = "500m"
-              memory = "512Mi"
-            }
-          }
-
-          liveness_probe {
-            http_get {
-              path = "/health/"
-              port = 8000
-            }
-            initial_delay_seconds = 30
-            period_seconds        = 10
-          }
-
-          readiness_probe {
-            http_get {
-              path = "/health/"
-              port = 8000
-            }
-            initial_delay_seconds = 15
-            period_seconds        = 5
-          }
-        }
-      }
-    }
-  }
-}
-
-# ── Service (LoadBalancer) ───────────────────────────────────────────────────
-
-resource "kubernetes_service" "app" {
-  metadata {
-    name      = "${var.app_name}-service"
-    namespace = kubernetes_namespace.app.metadata[0].name
+  identity {
+    type = "SystemAssigned"
   }
 
-  spec {
-    type = "LoadBalancer"
-
-    selector = {
-      app = var.app_name
-    }
-
-    port {
-      port        = 80
-      target_port = 8000
-      protocol    = "TCP"
-    }
+  network_profile {
+    network_plugin    = "azure"
+    load_balancer_sku = "standard"
+    service_cidr      = "10.1.0.0/16"
+    dns_service_ip    = "10.1.0.10"
   }
+
+  tags = var.tags
 }

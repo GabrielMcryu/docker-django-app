@@ -29,7 +29,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -93,13 +93,19 @@ DATABASES = {
     }
 }
 
-REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1')
+_redis_host = os.getenv('REDIS_HOST', '127.0.0.1')
+_redis_port = os.getenv('REDIS_PORT', '6379')
+_redis_password = os.getenv('REDIS_PASSWORD', '')
+if _redis_password:
+    REDIS_URL = f"redis://:{_redis_password}@{_redis_host}:{_redis_port}/1"
+else:
+    REDIS_URL = f"redis://{_redis_host}:{_redis_port}/1"
 
 # Cache
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+        'LOCATION': REDIS_URL,
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
