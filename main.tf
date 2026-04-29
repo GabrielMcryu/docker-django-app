@@ -11,8 +11,8 @@ terraform {
   #   az storage account create -n <unique_name> -g tfstate-rg -l eastus --sku Standard_LRS
   #   az storage container create -n tfstate --account-name <unique_name>
   backend "azurerm" {
-    resource_group_name  = "tfstate-rg"
-    storage_account_name = "yourterraformstate"   # <-- replace with your actual name
+    resource_group_name  = "devops-tf-rg"
+    storage_account_name = "gabrielmcryutfstate46264"   # <-- replace with your actual name
     container_name       = "tfstate"
     key                  = "django-aks.tfstate"
   }
