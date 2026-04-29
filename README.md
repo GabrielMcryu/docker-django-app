@@ -115,6 +115,10 @@ The GitHub Actions workflow runs on every push to `main` and:
 2. Builds the Docker image
 3. Pushes the image tagged with `latest` and the commit SHA to GHCR
 
+A successful CI run building and publishing the Docker image to GHCR:
+
+![CI/CD Docker image deployment](images/ci-cd-docker-image-deployment.png)
+
 ## Azure Deployment (AKS)
 
 The application is deployed to Azure Kubernetes Service (AKS) via Terraform, with managed Azure Postgres and Redis backing it.
