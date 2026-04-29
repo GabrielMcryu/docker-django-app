@@ -205,7 +205,7 @@ Books endpoint — confirms the pods can reach Azure Postgres via the private DN
 | Issue | Fix |
 |---|---|
 | `LocationIsOfferRestricted` when creating Postgres in `eastus` | Subscription restriction — switch region in `terraform.tfvars`: `location = "eastus2"` |
-| `Invalid provider configuration depends on values that cannot be determined until apply` (kubernetes provider) | Chicken-and-egg with AKS. Two-phase apply: temporarily comment out the `kubernetes` provider and `module "kubernetes_app"` block, apply to create AKS, then uncomment and apply again |
+| `Invalid provider configuration depends on values that cannot be determined until apply` (kubernetes provider) | The kubernetes provider needs the AKS cluster outputs, which don't exist until AKS is created. Two-phase apply: temporarily comment out the `kubernetes` provider and `module "kubernetes_app"` block, apply to create AKS, then uncomment and apply again |
 | `OIDCIssuerFeatureCannotBeDisabled` on AKS update | Azure auto-enables OIDC but won't let it be disabled. Add `oidc_issuer_enabled = true` to the `azurerm_kubernetes_cluster` resource |
 | `A resource with the ID ... already exists` after a failed apply | Phantom resources from a previous half-completed run. Import into state: `terraform import <address> <azure-resource-id>` |
 | `Provider produced inconsistent result after apply` | Transient Azure API consistency issue — resources usually exist despite the error. Re-run `terraform plan` to reconcile, then `terraform apply` |
