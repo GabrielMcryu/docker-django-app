@@ -8,7 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
-*.env
 
 # Terraform
 *.tfstate
@@ -16,6 +15,8 @@ wheels/
 *.tfstate.lock.info
 .terraform/
 .terraform.lock.hcl
+tfplan
+*.tfplan
 
 # Variable files that may contain secrets
 *.tfvars
