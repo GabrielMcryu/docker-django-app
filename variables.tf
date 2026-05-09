@@ -49,9 +49,8 @@ variable "k8s_namespace" {
 }
 
 variable "container_image" {
-  description = "Full GHCR image reference (ghcr.io/owner/repo:tag)."
+  description = "Full GHCR image reference (ghcr.io/owner/repo:tag). Set in terraform.tfvars."
   type        = string
-  default     = "ghcr.io/yourusername/django-app:latest"  # update with your GitHub username
 }
 
 variable "app_replicas" {

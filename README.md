@@ -170,14 +170,19 @@ The storage account holds the Terraform state file, isolated from the project's 
 
 2. Update the backend block in `main.tf` with the storage account name.
 
-3. Set sensitive variables:
+3. Create your `terraform.tfvars` from the example and fill in `ghcr_username` and `container_image`:
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+4. Set sensitive variables via environment (kept out of the tfvars file):
 ```bash
 export TF_VAR_db_admin_password='<strong-password>'
 export TF_VAR_django_secret_key='<random-secret-key>'
 export TF_VAR_ghcr_token='<github-pat-with-read:packages>'
 ```
 
-4. Apply:
+5. Apply:
 ```bash
 terraform init
 terraform plan -out=tfplan
