@@ -91,13 +91,14 @@ resource "kubernetes_deployment" "app" {
           }
 
           dynamic "env" {
-            for_each = var.secret_env_vars
+            # Iterate the keys only — values stay sensitive and come from the K8s secret.
+            for_each = nonsensitive(toset(keys(var.secret_env_vars)))
             content {
-              name = env.key
+              name = env.value
               value_from {
                 secret_key_ref {
                   name = kubernetes_secret.app.metadata[0].name
-                  key  = env.key
+                  key  = env.value
                 }
               }
             }
