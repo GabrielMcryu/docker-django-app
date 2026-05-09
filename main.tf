@@ -12,7 +12,7 @@ terraform {
   #   az storage container create -n tfstate --account-name <unique_name>
   backend "azurerm" {
     resource_group_name  = "devops-tf-rg"
-    storage_account_name = "gabrielmcryutfstate46264"   # <-- replace with your actual name
+    storage_account_name = "gabrielmcryutfstate32434"
     container_name       = "tfstate"
     key                  = "django-aks.tfstate"
   }
