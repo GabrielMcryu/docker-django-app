@@ -121,6 +121,7 @@ jobs:
           az aks get-credentials \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --name "$AKS_CLUSTER_NAME" \
+            --admin \
             --overwrite-existing
 
       - name: Update deployment image to current commit

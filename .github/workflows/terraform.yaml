@@ -34,10 +34,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS_TF }}
+      - name: Set ARM_* env vars from Service Principal JSON
+        env:
+          AZURE_CREDS: ${{ secrets.AZURE_CREDENTIALS_TF }}
+        run: |
+          CLIENT_SECRET=$(jq -r '.clientSecret' <<< "$AZURE_CREDS")
+          echo "::add-mask::$CLIENT_SECRET"
+          {
+            echo "ARM_CLIENT_ID=$(jq -r '.clientId' <<< "$AZURE_CREDS")"
+            echo "ARM_CLIENT_SECRET=$CLIENT_SECRET"
+            echo "ARM_TENANT_ID=$(jq -r '.tenantId' <<< "$AZURE_CREDS")"
+            echo "ARM_SUBSCRIPTION_ID=$(jq -r '.subscriptionId' <<< "$AZURE_CREDS")"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
